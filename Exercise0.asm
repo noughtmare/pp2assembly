@@ -18,7 +18,7 @@
    DSPDIG      EQU    9  ;  relative position of the 7-segment display's digit selector
    DSPSEG      EQU    8  ;  relative position of the 7-segment display's segments
 
-  begin :      BRA  main ;Glume ;main        ;  skip subroutine Hex7Seg
+  begin :      BRA  Glume ;main        ;  skip subroutine Hex7Seg
 ;  
 ;      Routine Hex7Seg maps a number in the range [0..15] to its hexadecimal
 ;      representation pattern for the 7-segment display.
@@ -67,6 +67,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
               STOR  R1  [R5+DSPSEG] ; and place this in the Display Element
               LOAD  R1  %000001  ;  R1 := the bitpattern identifying Digit 0
               STOR  R1  [R5+DSPDIG] ; activate Display Element nr. 0
+               BRS  waste_time
                BRA  next         ;  repeat ad infinitum...
 ;
    next :     LOAD  R0  [SP++] ; pull input from stack
@@ -81,6 +82,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
               STOR  R1  [R5+DSPSEG] ; and place this i n the Display Element
               LOAD  R1  %000010  ;  R1 := the bitpattern identifying Digit 1
               STOR  R1  [R5+DSPDIG] ; activate Display Element nr. 1
+               BRS waste_time
                BRA  loop         ;  repeat ad infinitum...
      
     ; lol     
@@ -89,25 +91,39 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
               STOR R0 [R5+DSPSEG]
               LOAD R0 %0100000
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               LOAD R0 %00001110 ; L
               STOR R0 [R5+DSPSEG]
               LOAD R0 %010000
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               LOAD R0 %00111110 ; U
               STOR R0 [R5+DSPSEG]
               LOAD R0 %001000
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               LOAD R0 %01100110 ; M/2
               STOR R0 [R5+DSPSEG]
               LOAD R0 %000100
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               LOAD R0 %01110010 ; M/2 + 1
               STOR R0 [R5+DSPSEG]
               LOAD R0 %000010
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               LOAD R0 %01001111 ; E
               STOR R0 [R5+DSPSEG]
               LOAD R0 %000001
               STOR R0 [R5+DSPDIG]
+              BRS  waste_time
               BRA Glume ; leggo
+
+waste_time: PUSH R2
+            LOAD R2 5000
+while:      SUB R2 1
+            BEQ fin
+            BRA while
+fin:        PULL R2
+            RTS
 @END
