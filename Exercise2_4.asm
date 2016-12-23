@@ -11,17 +11,17 @@
    OUTPUT      EQU   11  ;  relative position of the power outputs
    DSPDIG      EQU    9  ;  relative position of the display selector
    DSPSEG      EQU    8  ;  relative position of the segment selector
-   DELTA       EQU 1000  ;  1 KHz --> 1 ms --> 1000 µs
+   DELTA       EQU  100  ;  1 KHz --> 1 ms --> 1000 µs
    ;  Array to store digits of the counter
    ARR0        EQU    1  ;
    ARR1        EQU    2  ;
    ARR2        EQU    3  ;
    ARR3        EQU    4  ;
-   ARR4        EQU    5  ;
-   ARR5        EQU    6  ;
+   ;ARR4        EQU    5  ;
+   ;ARR5        EQU    6  ;
    DSPCNT      EQU    7  ;  Counter for the displays
    COUNTER     EQU    8  ;  The actual counter
-   FIXTMR      EQU    9  ;  Fixed timer value pulled at start
+   FIXTMR      EQU    5  ;  Fixed timer value pulled at start
    
 @CODE
 begin :     BRA  main    ;  skip subroutine Hex7Seg
@@ -91,7 +91,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
    disp:    BRS   btn_chk       ;
             LOAD  R2  [GB+DSPCNT]   ;  Cycle through displays
             ADD   R2  1         ;
-            MOD   R2  6         ;
+            MOD   R2  4         ;
             STOR  R2  [GB+DSPCNT]   ;
             LOAD  R1  1         ;
    power2:  CMP   R2  0         ;  While R2>0 do R1+R1, R2--
