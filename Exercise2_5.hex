@@ -1,0 +1,148 @@
+@C 3ffff 000a0
+00015       ; 00000 begin :       BRA main
+00210       ; 00001 Hex7Seg :     BRS Hex7Seg_bgn
+0007e       ; 00002 Hex7Seg_tbl : CONS %01111110
+00030       ; 00003               CONS %00110000
+0006d       ; 00004               CONS %01101101
+00079       ; 00005               CONS %01111001
+00033       ; 00006               CONS %00110011
+0005b       ; 00007               CONS %01011011
+0005f       ; 00008               CONS %01011111
+00070       ; 00009               CONS %01110000
+0007f       ; 0000a               CONS %01111111
+0007b       ; 0000b               CONS %01111011
+00077       ; 0000c               CONS %01110111
+0001f       ; 0000d               CONS %00011111
+0004e       ; 0000e               CONS %01001110
+0003d       ; 0000f               CONS %00111101
+0004f       ; 00010               CONS %01001111
+00047       ; 00011               CONS %01000111
+3000f       ; 00012 Hex7Seg_bgn : AND R0 %01111
+08df1       ; 00013               LOAD R1 [R7++]
+08d20       ; 00014               LOAD R1 [R1+R0]
+045f1       ; 00015               RTS
+0a8f0       ; 00016 main :        LOAD R5 IOAREA
+09800       ; 00017               LOAD R3 0
+0a0fd       ; 00018 timer0 :      LOAD R4 TIMER
+3dcc8       ; 00019               STOR R3 [R6+COUNTER]
+09c80       ; 0001a               LOAD R3 [R4+0]
+3dcdf 00021 ; 0001b               STOR R3 [R6+FIXTMR]
+09cdf 00021 ; 0001d timer1 :      LOAD R3 [R6+FIXTMR]
+11832       ; 0001f               SUB R3 DELTA
+3dcdf 00021 ; 00020               STOR R3 [R6+FIXTMR]
+09cdf 00021 ; 00022 timer2 :      LOAD R3 [R6+FIXTMR]
+15c80       ; 00024               CMP R3 [R4+0]
+017fc       ; 00025               BMI timer2
+00261       ; 00026 disp :        BRS btn_chk
+094c7       ; 00027               LOAD R2 [R6+DSPCNT]
+0d001       ; 00028               ADD R2 1
+29006       ; 00029               MOD R2 6
+3d4c7       ; 0002a               STOR R2 [R6+DSPCNT]
+08801       ; 0002b               LOAD R1 1
+15000       ; 0002c power2 :      CMP R2 0
+00403       ; 0002d               BEQ end_pow
+0c901       ; 0002e               ADD R1 R1
+11001       ; 0002f               SUB R2 1
+001fb       ; 00030               BRA power2
+094c7       ; 00031 end_pow :     LOAD R2 [R6+DSPCNT]
+0d001       ; 00032               ADD R2 1
+085c2       ; 00033               LOAD R0 [R6+R2]
+3c4a8       ; 00034               STOR R0 [R5+DSPSEG]
+3cca9       ; 00035               STOR R1 [R5+DSPDIG]
+001e6       ; 00036               BRA timer1
+0d801       ; 00037 btn0 :        ADD R3 1
+0000e       ; 00038               BRA Counter2Dig
+11801       ; 00039 btn1 :        SUB R3 1
+0000c       ; 0003a               BRA Counter2Dig
+0d83c       ; 0003b btn2 :        ADD R3 60
+0000a       ; 0003c               BRA Counter2Dig
+1183c       ; 0003d btn3 :        SUB R3 60
+00008       ; 0003e               BRA Counter2Dig
+0d880 00e10 ; 0003f btn4 :        ADD R3 3600
+00005       ; 00041               BRA Counter2Dig
+11880 00e10 ; 00042 btn5 :        SUB R3 3600
+00002       ; 00044               BRA Counter2Dig
+09800       ; 00045 btn7 :        LOAD R3 0
+00000       ; 00046               BRA Counter2Dig
+01402       ; 00047 Counter2Dig : BPL skip_mod
+0d880 15180 ; 00048               ADD R3 86400
+29880 15180 ; 0004a skip_mod :    MOD R3 86400
+3dcc8       ; 0004c               STOR R3 [R6+COUNTER]
+08000       ; 0004d               LOAD R0 0
+15880 08ca0 ; 0004e tenhour :     CMP R3 36000
+01604       ; 00050               BMI tenhour1
+11880 08ca0 ; 00051               SUB R3 36000
+0c001       ; 00053               ADD R0 1
+001f9       ; 00054               BRA tenhour
+003ab       ; 00055 tenhour1 :    BRS Hex7Seg
+3ccc6       ; 00056               STOR R1 [R6+ARR5]
+08000       ; 00057               LOAD R0 0
+15880 00e10 ; 00058 hour :        CMP R3 3600
+01604       ; 0005a               BMI hour1
+11880 00e10 ; 0005b               SUB R3 3600
+0c001       ; 0005d               ADD R0 1
+001f9       ; 0005e               BRA hour
+003a1       ; 0005f hour1 :       BRS Hex7Seg
+34880 3ff80 ; 00060               OR R1 %10000000
+3ccc5       ; 00062               STOR R1 [R6+ARR4]
+08000       ; 00063               LOAD R0 0
+15880 00258 ; 00064 tenmin :      CMP R3 600
+01604       ; 00066               BMI tenmin1
+11880 00258 ; 00067               SUB R3 600
+0c001       ; 00069               ADD R0 1
+001f9       ; 0006a               BRA tenmin
+00395       ; 0006b tenmin1 :     BRS Hex7Seg
+3ccc4       ; 0006c               STOR R1 [R6+ARR3]
+08000       ; 0006d               LOAD R0 0
+1583c       ; 0006e min :         CMP R3 60
+01603       ; 0006f               BMI min1
+1183c       ; 00070               SUB R3 60
+0c001       ; 00071               ADD R0 1
+001fb       ; 00072               BRA min
+0038d       ; 00073 min1 :        BRS Hex7Seg
+34880 3ff80 ; 00074               OR R1 %10000000
+3ccc3       ; 00076               STOR R1 [R6+ARR2]
+08000       ; 00077               LOAD R0 0
+1580a       ; 00078 tensec :      CMP R3 10
+01603       ; 00079               BMI tensec1
+1180a       ; 0007a               SUB R3 10
+0c001       ; 0007b               ADD R0 1
+001fb       ; 0007c               BRA tensec
+00383       ; 0007d tensec1 :     BRS Hex7Seg
+3ccc2       ; 0007e               STOR R1 [R6+ARR1]
+08000       ; 0007f               LOAD R0 0
+15801       ; 00080 sec :         CMP R3 1
+01603       ; 00081               BMI sec1
+11801       ; 00082               SUB R3 1
+0c001       ; 00083               ADD R0 1
+001fb       ; 00084               BRA sec
+0037b       ; 00085 sec1 :        BRS Hex7Seg
+3ccc1       ; 00086               STOR R1 [R6+ARR0]
+045f1       ; 00087               RTS
+084a7       ; 00088 btn_chk :     LOAD R0 [R5+INPUT]
+09cc8       ; 00089               LOAD R3 [R6+COUNTER]
+14001       ; 0008a               CMP R0 %00000001
+005ab       ; 0008b               BEQ btn0
+14002       ; 0008c               CMP R0 %00000010
+005ab       ; 0008d               BEQ btn1
+14004       ; 0008e               CMP R0 %00000100
+005ab       ; 0008f               BEQ btn2
+14008       ; 00090               CMP R0 %00001000
+005ab       ; 00091               BEQ btn3
+14010       ; 00092               CMP R0 %00010000
+005ab       ; 00093               BEQ btn4
+14020       ; 00094               CMP R0 %00100000
+005ac       ; 00095               BEQ btn5
+14080 00080 ; 00096               CMP R0 %010000000
+005ac       ; 00098               BEQ btn7
+045f1       ; 00099               RTS
+08080 01388 ; 0009a waste_time :  LOAD R0 5000
+10001       ; 0009c while :       SUB R0 1
+00401       ; 0009d               BEQ fin
+001fd       ; 0009e               BRA while
+045f1       ; 0009f fin :         RTS
+
+
+@S 3ffff 000f0
+
+.
