@@ -132,7 +132,9 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
    
    ;  Converts the counter into a decimal number and stores its digits in the array
    Counter2Dig:
-            MOD   R3  5000  ;  TODO: FIX UNDERFLOW ((-1 MOD 2^18) MOD 5000) = 2143 BUT IT DOESN'T EVEN DO THAT IT DOES NOTHING MAYBE OVERFLOW FLAG
+            BPL   skip_mod  ;
+            ADD   R3  5000  ;
+   skip_mod:MOD   R3  5000  ;
             STOR  R3  [GB+COUNTER]  ;
             ;  The counter is mod 5000
             ;  Idea: check 1000s - 100s - 10s - 1s with some loop
@@ -163,9 +165,9 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             LOAD  R0  0     ;
    ones:    CMP   R3  1     ;
             BMI   ones1     ;  If negative --> No more 1s
-            SUB   R3  1   ;
+            SUB   R3  1     ;
             ADD   R0  1     ;  One more 1 found
-            BRA   ones    ;  Check again
+            BRA   ones      ;  Check again
    ones1:   BRS   Hex7Seg   ;
             STOR  R1 [GB+ARR0] ;  Display 0 --> 10^0
             RTS             ;
