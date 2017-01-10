@@ -1,7 +1,7 @@
 ;
 ;      2016.12.22:  author:  Jaro Reinders, Tijmen Jansen
 ;
-;      Counter modulo 5000
+;      Alarm
 ;
 
 @DATA
@@ -12,18 +12,14 @@
    DSPDIG      EQU    9  ;  relative position of the display selector
    DSPSEG      EQU    8  ;  relative position of the segment selector
    DELTA       EQU   20  ;  1 KHz --> 1 ms --> 1000 µs
-   DELTA2      EQU  10000 ;
-   ;  Array to store digits of the counter
-   ARR0        EQU    1  ;
-   ARR1        EQU    2  ;
-   ARR2        EQU    3  ;
-   ARR3        EQU    4  ;
-   ARR4        EQU    5  ;
-   ARR5        EQU    6  ;
-   DSPCNT      EQU    7  ;  Counter for the displays
-   COUNTER     EQU    8  ;  The actual counter
-   FIXTMR      EQU    33  ;  Fixed timer value pulled at start
-   FIXTMR      EQU    34  ;  Fixed timer value pulled at start
+   DELTA2      EQU  10000;  1 s
+   ;  TO GET N WORDS [0..N-1] CHOOSE N+1, BECAUSE FUCK YOU THAT'S WHY
+   ARRX        DS     7  ;  Array to store digits of the counter
+   DSPCNT      DS     2  ;  Counter for the displays
+   COUNTER     DS     2  ;  The actual counter
+   FIXTMR      DS     2  ;  Fixed timer value pulled at start
+   FIXTMR2     DS     2  ;  Fixed timer value pulled at start2
+   ONOFF       DS     2  ;  Button6 On/Off toggle
    
 @CODE
 begin :     BRA  main    ;  skip subroutine Hex7Seg
@@ -59,26 +55,6 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
 ;
    main :   LOAD  R5  IOAREA    ;  R5 := "address of the area with the I/O-registers"
             LOAD  R3  0         ;  Set the counter to 0
-            ;  TEMP VALS FOR DISPLAY
-            ;LOAD  R0  0         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR0] ;
-            ;LOAD  R0  1         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR1] ;
-            ;LOAD  R0  2         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR2] ;
-            ;LOAD  R0  3         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR3] ;
-            ;LOAD  R0  4         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR4] ;
-            ;LOAD  R0  5         ;
-            ;BRS   Hex7Seg       ;
-            ;STOR  R1  [GB+ARR5] ;
-            ; ----------------------
    timer0:  LOAD  R4  TIMER     ;
             STOR  R3  [GB+COUNTER]  ;
             LOAD  R3  [R4]      ;
@@ -88,7 +64,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             STOR  R3  [GB+FIXTMR]   ;
    timer2:  LOAD  R3  [GB+FIXTMR]   ;
             CMP   R3  [R4]      ;
-            BMI   timer2        ;
+            BMI   cntdwn2       ;  Swap between timer and countdown
             ;BEGIN PERIODIC TASK
    disp:    BRS   btn_chk       ;
             LOAD  R2  [GB+DSPCNT]   ;  Cycle through displays
@@ -108,6 +84,34 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             STOR  R1  [R5+DSPDIG]   ;
             ;END PERIODIC TASK
             BRA   timer1        ;
+            
+  cntdwn0:  LOAD  R4  TIMER     ;  Obsolete
+            LOAD  R3  [R4]      ;  Obsolete
+            STOR  R3  [GB+FIXTMR2]  ;  Obsolete
+  cntdwn1:  LOAD  R3  [GB+FIXTMR2]  ;
+            SUB   R3  DELTA2    ;
+            STOR  R3  [GB+FIXTMR2]  ;
+            BRA   timer2        ;  Swap between timer and countdown
+  cntdwn2:  LOAD  R3  [GB+FIXTMR2]  ;
+            CMP   R3  [R4]      ;
+            BMI   timer2        ;  Swap between timer and countdown
+            ;BEGIN PERIODIC TASK
+            LOAD  R3  [GB+ONOFF];
+            CMP   R3  1         ;
+            BNE   cntdwn1       ;
+            LOAD  R3  [GB+COUNTER]  ;
+            SUB   R3  1         ;
+            STOR  R3  [GB+COUNTER]  ;
+            BRS   Counter2Dig   ;  Update visible counter
+            LOAD  R3  [GB+COUNTER]  ;  Check if timer == 0
+            CMP   R3  1         ;
+            BPL   pooper        ;
+            BRS   party         ;
+            LOAD  R3  0         ;
+            STOR  R3  [GB+COUNTER]  ;
+  pooper:   ;  PARTY.STATUS = POOPED;
+            ;END PERIODIC TASK
+            BRA   cntdwn1       ;
             
             
    btn0:    ;  counter++
@@ -131,15 +135,22 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
    btn7:    ;  counter = 0
             LOAD R3  0      ;
             BRA  Counter2Dig;
+   btn6:    ;  Alarm stop/run
+            ;LOAD R0  [GB+ONOFF]    ;
+            ;XOR   R0  1      ;
+            LOAD  R0  1     ;
+            STOR  R0  [GB+ONOFF]    ;
+            RTS             ;
    
    ;  Converts the counter into a decimal number and stores its digits in the array
    Counter2Dig:
+            BRS   waste_time;
             BPL   skip_mod  ;
             ADD   R3  86400 ;
    skip_mod:MOD   R3  86400 ;
             STOR  R3  [GB+COUNTER]  ;
-            ;  The counter is mod 5000
-            ;  Idea: check 1000s - 100s - 10s - 1s with some loop
+            ;  The alaram is mod 24h
+            ;  Idea: check 10h - 1h - 10min - 1min - 10s - 1s with some loop
             LOAD  R0  0     ;  Used to count powers of ten
    tenhour: CMP   R3  36000 ;
             BMI   tenhour1  ;  If negative --> No more 1000s
@@ -147,7 +158,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             ADD   R0  1     ;  One more 1000 found
             BRA   tenhour   ;  Check again
    tenhour1:BRS   Hex7Seg   ;
-            STOR  R1  [GB+ARR5] ;  Display 3 --> 10^3
+            STOR  R1  [GB+ARRX + 6] ;  Display 3 --> 10^3
             LOAD  R0  0     ;  Reset counting of powers of ten
    hour:    CMP   R3  3600  ;
             BMI   hour1     ;  If negative --> No more 100s
@@ -155,16 +166,16 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             ADD   R0  1     ;  One more 100 found
             BRA   hour      ;  Check again
    hour1:   BRS   Hex7Seg   ;
-            OR    R1 %10000000
-            STOR  R1 [GB+ARR4]  ;  Display 2 --> 10^2
+            OR    R1 %10000000  ;  Decimal point
+            STOR  R1 [GB+ARRX + 5]  ;  Display 2 --> 10^2
             LOAD  R0  0     ;
-   tenmin:  CMP   R3  600  ;
+   tenmin:  CMP   R3  600   ;
             BMI   tenmin1   ;  If negative --> No more 100s
-            SUB   R3  600  ;
+            SUB   R3  600   ;
             ADD   R0  1     ;  One more 100 found
             BRA   tenmin    ;  Check again
    tenmin1: BRS   Hex7Seg   ;
-            STOR  R1 [GB+ARR3]  ;  Display 2 --> 10^2
+            STOR  R1 [GB+ARRX + 4]  ;  Display 2 --> 10^2
             LOAD  R0  0     ;
    min:     CMP   R3  60    ;
             BMI   min1      ;  If negative --> No more 10s
@@ -172,8 +183,8 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             ADD   R0  1     ;  One more 10 found
             BRA   min       ;  Check again
    min1:    BRS   Hex7Seg   ;
-            OR    R1 %10000000
-            STOR  R1 [GB+ARR2]  ;  Display 1 --> 10^1
+            OR    R1 %10000000  ;  Decimal point
+            STOR  R1 [GB+ARRX + 3]  ;  Display 1 --> 10^1
             LOAD  R0  0     ;
    tensec:  CMP   R3  10    ;
             BMI   tensec1   ;  If negative --> No more 10s
@@ -181,7 +192,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             ADD   R0  1     ;  One more 10 found
             BRA   tensec    ;  Check again
    tensec1: BRS   Hex7Seg   ;
-            STOR  R1 [GB+ARR1]  ;  Display 1 --> 10^1
+            STOR  R1 [GB+ARRX + 2]  ;  Display 1 --> 10^1
             LOAD  R0  0     ;
    sec:     CMP   R3  1     ;
             BMI   sec1      ;  If negative --> No more 1s
@@ -189,10 +200,10 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             ADD   R0  1     ;  One more 1 found
             BRA   sec       ;  Check again
    sec1:    BRS   Hex7Seg   ;
-            STOR  R1 [GB+ARR0] ;  Display 0 --> 10^0
+            STOR  R1 [GB+ARRX + 1] ;  Display 0 --> 10^0
             RTS             ;
             
-    btn_chk: LOAD  R0  [R5+INPUT]    ;  Get the input from the buttons
+   btn_chk: LOAD  R0  [R5+INPUT]    ;  Get the input from the buttons
             ;  "You may assume that, at any moment, at most one button is pressed."
             LOAD  R3  [GB+COUNTER]  ;
             CMP   R0  %00000001     ;  Is Button0 pressed?
@@ -209,9 +220,53 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             BEQ   btn5          ;
             CMP   R0  %010000000    ;  Is Button7 pressed?
             BEQ   btn7          ;
+            LOAD  R1  %01000000 ;
+            AND   R0  R1        ;
+            CMP   R0  %01000000     ;  Is Button6 pressed?
+            BEQ   btn6          ;
+            LOAD  R0  0         ;
+            STOR  R0  [GB+ONOFF];
             RTS                 ;
-   
-waste_time: LOAD  R0 5000
+            
+   party:   ;  Too lazy to loop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            LOAD  R0  %111111   ;  Turn all LEDs on
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            BRS   waste_time    ;
+            LOAD  R0  0         ;  Turn all LEDs off
+            STOR  R0  [R5+OUTPUT]  ;  Woopwoop
+            RTS
+            
+waste_time: LOAD  R0 $0fffff;
 while:      SUB   R0 1
             BEQ   fin
             BRA   while
