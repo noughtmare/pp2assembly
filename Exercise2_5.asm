@@ -266,7 +266,7 @@ Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
             STOR  R0  [R5+OUTPUT]  ;  Woopwoop
             RTS
             
-waste_time: LOAD  R0 $0fffff;
+waste_time: LOAD  R0 0000;
 while:      SUB   R0 1
             BEQ   fin
             BRA   while
