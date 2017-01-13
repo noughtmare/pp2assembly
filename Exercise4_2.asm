@@ -1,149 +1,133 @@
 ;
-;      2011.01.11:  author:  Jaro Reinders, Tijmen Jansen
+;      2017.01.13:  authors:  Jaro Reinders, Tijmen Jansen
 ;
-;      Potentiometer
+;      PWM
 ;
-
 @DATA
-   TIMER       EQU   -3  ;  address of the Timer
-   IOAREA      EQU  -16  ;  address of the I/O-Area, modulo 2^18
-   INPUT       EQU    7  ;  position of the input buttons (relative to IOAREA)
-   OUTPUT      EQU   11  ;  relative position of the power outputs
-   DSPDIG      EQU    9  ;  relative position of the display selector
-   DSPSEG      EQU    8  ;  relative position of the segment selector
-   ADCONVS     EQU  -10  ;  #potential
-   DELTA       EQU   20  ;  1 KHz --> 1 ms --> 1000 µs
-   ;  TO GET N WORDS [0..N-1] CHOOSE N+1, BECAUSE FUCK YOU THAT'S WHY
-   FIXTMR      DS     2  ;
-   DSPCNT      DS     2  ;  Counter for the displays
-   ARRX        DS     7  ;
-   
+
+  INPUT   EQU   -9                 ; location of the input buttons
+  ADCONVS EQU  -10                 ; location of the potential meter
+  OUTLEDS EQU   -5		   ; location of the output leds
+  PWMVAR  DS     4                 ; 4 Distinct PWM values
+  LASTVAR DS     1		   ; last state of buttons
+
+  ; R0 := Temp var
+  ; R1 := Counter
+  ; R2 := PWM Threshold
+  ; R3 := Temp button var
+  ; R4 := Input check var
+  ; R5 := New led state
+  ; R6 := GB
+  ; R7 := SP
+
 @CODE
-begin :     BRA  main    ;  skip subroutine Hex7Seg
-;  
-;      Routine Hex7Seg maps a number in the range [0..15] to its hexadecimal
-;      representation pattern for the 7-segment display.
-;      R0 : upon entry, contains the number
-;      R1 : upon exit,  contains the resulting pattern
-;
-;Hex7Seg     :  BRS  Hex7Seg_bgn  ;  push address(tbl) onto stack and proceed at "bgn"
-;Hex7Seg_tbl : CONS  %01111110    ;  7-segment pattern for '0'
-;              CONS  %00110000    ;  7-segment pattern for '1'
-;              CONS  %01101101    ;  7-segment pattern for '2'
-;              CONS  %01111001    ;  7-segment pattern for '3'
-;              CONS  %00110011    ;  7-segment pattern for '4'
-;              CONS  %01011011    ;  7-segment pattern for '5'
-;              CONS  %01011111    ;  7-segment pattern for '6'
-;              CONS  %01110000    ;  7-segment pattern for '7'
-;              CONS  %01111111    ;  7-segment pattern for '8'
-;              CONS  %01111011    ;  7-segment pattern for '9'
-;              CONS  %01110111    ;  7-segment pattern for 'A'
-;              CONS  %00011111    ;  7-segment pattern for 'b'
-;              CONS  %01001110    ;  7-segment pattern for 'C'
-;              CONS  %00111101    ;  7-segment pattern for 'd'
-;              CONS  %01001111    ;  7-segment pattern for 'E'
-;              CONS  %01000111    ;  7-segment pattern for 'F'
-;Hex7Seg_bgn:   AND  R0  %01111   ;  R0 := R0 MOD 16 , just to be safe...
-;              LOAD  R1  [SP++]   ;  R1 := address(tbl) (retrieve from stack)
-;              LOAD  R1  [R1+R0]  ;  R1 := tbl[R0]
-;               RTS
-;
-;      The body of the main program
-;
-   main :   LOAD  R5  IOAREA    ;  R5 := "address of the area with the I/O-registers"
-   timer0:  LOAD  R4  TIMER     ;
-            LOAD  R3  [R4]      ;
-            STOR  R3  [GB+FIXTMR]
-   timer1:  LOAD  R3  [GB+FIXTMR]
-            SUB   R3  DELTA     ;
-            STOR  R3  [GB+FIXTMR]   ;
-   timer2:  LOAD  R3  [GB+FIXTMR]   ;
-            LOAD  R4  TIMER     ;
-            CMP   R3  [R4]      ;
-            BMI   timer2       ;  Swap between timer and countdown
-            ;BEGIN PERIODIC TASK
-            BRS readpot         ;
 
-   disp:    ADD   R1  1         ; Make a counter that counts...
-            MOD   R1  100       ; ... from 0 to 99
-            BNE   check         ; only readpot if R1 is 0
-   readpot: LOAD  R4  ADCONVS   ;
-            LOAD  R2  [R4]      ;  Get contents
-            AND   R2  %011111111 ;  Lower 8 bits
-            LOAD  R0  250       ;
-            CMP   R0  R2        ;
-            BPL   r2d           ;
-            LOAD  R2  250       ; We are lazy
-      r2d:  MULS  R2  4
-            DIV   R2  10
-    check:  CMP   R1 R2         ; check if the pot value is smaller than the value of the counter
-            BMI   off           ; branch if R2 > R1
-    on:     LOAD R0 1
-            STOR R0 [R5+OUTPUT]
-            BRA end
-    off:    LOAD R0 0
-            STOR R0 [R5+OUTPUT]
-    end:    BRA timer1          ; repeat the periodic task
+         ; incremenent the counter
+   main: ADD  R1 1                 ; Make a counter that counts...
+         MOD  R1 100               ; ... from 0 to 99
 
-;  disp:    LOAD  R2  [GB+DSPCNT]   ;  Cycle through displays
-;           ADD   R2  1         ;
-;           MOD   R2  3         ;
-;           STOR  R2  [GB+DSPCNT]   ;
-;           LOAD  R1  1         ;
-;  power2:  CMP   R2  0         ;  While R2>0 do R1+R1, R2--
-;           BEQ   end_pow       ;
-;           ADD   R1  R1        ;
-;           SUB   R2  1         ;
-;           BRA   power2        ;
-;  end_pow: LOAD  R2  [GB+DSPCNT]   ;  We now have selected the right display element
-;           ADD   R2  1         ;
-;           ADD   R2  ARRX      ;
-;           LOAD  R0  [GB+R2]   ;
-;           SUB   R2  ARRX      ;
-;           STOR  R0  [R5+DSPSEG]   ;
-;           STOR  R1  [R5+DSPDIG]   ;
-;           ;END PERIODIC TASK
-;           BRA   timer1        ;
-;           
-;           
-;  readpot: LOAD  R4  ADCONVS   ;
-;           LOAD  R2  [R4]      ;  Get contents
-;           AND   R2  %0000000011111111 ;  Lower 8 bits
-;           STOR  R2  [R5+OUTPUT]  ;  Store in LEDs
-;           LOAD  R0  250       ;
-;           CMP   R0  R2        ;
-;           BPL   r2d           ;
-;           LOAD  R2  250       ;
-;  r2d:     MULS  R2  2         ;
-;           LOAD  R0  0         ;
-;   hndrds:  CMP   R2  100  ;
-;            BMI   hndrds1   ;  If negative --> No more 100s
-;            SUB   R2  100  ;
-;            ADD   R0  1     ;  One more 100 found
-;            BRA   hndrds    ;  Check again
-;   hndrds1: BRS   Hex7Seg   ;
-;            OR    R1 %10000000  ;  Decimal point
-;            STOR  R1  [GB+ARRX + 3] ;  Display 2 --> 10^2
-;            LOAD  R0  0     ;  Reset counting of powers of ten
-;   tens:    CMP   R2  10  ;
-;            BMI   tens1   ;  If negative --> No more 10s
-;            SUB   R2  10  ;
-;            ADD   R0  1     ;  One more 10 found
-;            BRA   tens    ;  Check again
-;   tens1:   BRS   Hex7Seg   ;
-;            STOR  R1  [GB+ARRX + 2] ;  Display 1 --> 10^1
-;            LOAD  R0  0     ;  Reset counting of powers of ten   
-;    ones:   CMP   R2  1  ;
-;            BMI   ones1   ;  If negative --> No more 10s
-;            SUB   R2  1  ;
-;            ADD   R0  1     ;  One more 10 found
-;            BRA   ones    ;  Check again
-;   ones1:   BRS   Hex7Seg   ;
-;            STOR  R1  [GB+ARRX + 1] ;  Display 0 --> 10^0
-;            RTS       ;
-            
-waste_time: LOAD  R0 5000;
-while:      SUB   R0 1
-            BEQ   fin
-            BRA   while
-fin:        RTS
+         ; read the buttons
+  click: LOAD R4 INPUT
+         LOAD R0 [R4]              ; Load the current state
+         LOAD R4 [GB + LASTVAR]    ; Load the last state
+         AND  R0 %00001111         ; filter the first 4 buttons
+         XOR  R4 R0                ; R4 := changed buttons, R0 := new button state
+         STOR R0 [GB + LASTVAR]    ; Store the current state in LASTVAR
+
+         ; check if the first button state has changed
+   btn0: LOAD R3 R4                ; R3 := changed buttons
+ 	 AND  R3 %00000001         ; select only the first button
+	 CMP  R3 1                 ; Has it changed state?
+         BNE  btn1                 ; No -> check the next button; Yes -> continue
+
+         ; check if the first button is now depressed
+         LOAD R3 R0                ; R3 := new button state
+         AND  R3 %00000001         ; select only the first button
+         CMP  R3 0                 ; Is it's new state 0?
+         BNE  btn1                 ; No -> check the next button; Yes -> continue
+
+         ; update the first PWM threshold
+         LOAD R3 [GB + PWMVAR + 0]
+         ADD  R3 1
+         MOD  R3 100
+         STOR R3 [GB + PWMVAR + 0]
+
+         ; See btn0
+   btn1: LOAD R3 R4
+ 	 AND  R3 %00000010
+         DIV  R3 2                 ; shift right by 1
+	 CMP  R3 1
+         BNE  btn2
+         LOAD R3 R0
+         AND  R3 %00000010
+         DIV  R3 2
+         CMP  R3 0
+         BNE  btn2
+         LOAD R3 [GB + PWMVAR + 1] 
+         ADD  R3 1
+         MOD  R3 100
+         STOR R3 [GB + PWMVAR + 1]
+
+         ; See btn0
+   btn2: LOAD R3 R4
+ 	 AND  R3 %00000100
+         DIV  R3 4                 ; shift right by 2
+	 CMP  R3 1
+         BNE  btn3
+         LOAD R3 R0
+         AND  R3 %00000100
+         DIV  R3 4
+         CMP  R3 0
+         BNE  btn3
+         LOAD R3 [GB + PWMVAR + 2] 
+         ADD  R3 1
+         MOD  R3 100
+         STOR R3 [GB + PWMVAR + 2]
+
+         ; See btn0
+   btn3: LOAD R3 R4               
+ 	 AND  R3 %00001000
+         DIV  R3 8                 ; shift right by 3
+	 CMP  R3 1
+         BNE  check
+         LOAD R3 R0
+         AND  R3 %00001000         
+         DIV  R3 8
+         CMP  R3 0
+         BNE  check
+         LOAD R3 [GB + PWMVAR + 3] 
+         ADD  R3 1
+         MOD  R3 100
+         STOR R3 [GB + PWMVAR + 3]
+
+  check: LOAD R5 0                 ; clear R5
+
+ chk_o0: LOAD R2 [GB + PWMVAR + 0] ; load the first PWM threshold
+         CMP  R2 R1                ; Is it greater than the counter?
+         BMI  chk_o1               ; No -> go to the second check; Yes -> continue
+         OR   R5 %00000001         ; enable the first button
+
+ chk_o1: LOAD R2 [GB + PWMVAR + 1]
+         CMP  R2 R1
+         BMI  chk_o2
+         OR   R5 %00000010
+
+ chk_o2: LOAD R2 [GB + PWMVAR + 2]
+         CMP  R2 R1
+         BMI  chk_o3
+         OR   R5 %00000100
+
+ chk_o3: LOAD R2 [GB + PWMVAR + 3]
+         CMP  R2 R1
+         BMI  format
+         OR   R5 %00001000
+
+ format: LOAD R0 R5
+         MULS R0 16
+         XOR  R5 %00001111
+         OR   R5 R0
+         LOAD R0 0
+         STOR R5 [R0 + OUTLEDS]
+         BRA  main
+
+@END
