@@ -1,11 +1,13 @@
 ;      2017.01.13:  authors:  Jaro Reinders, Tijmen Jansen
-@DATA
+@DATA 
 
+  TIMER   EQU  -3
   INPUT   EQU  -9 ; location of the input buttons
-  ADCONVS EQU -10 ; location of the potential meter
   OUTLEDS EQU  -5 ; location of the output leds
   PWMVAR  DS    4 ; 4 Distinct PWM values
   LASTVAR DS    1 ; last state of buttons
+  COUNT   DS    1 ;
+  DELTA   EQU   1 ;
 
 ; R0 := Temp var
 ; R1 := Counter
@@ -17,12 +19,22 @@
 ; R7 := SP
 
 @CODE
-         ; incremenent the counter
-   main: ADD  R1 1                 ; Make a counter that counts...
-         MOD  R1 100               ; ... from 0 to 99
 
+   init: ; R5 contains the pointer to the Code Segment
+         LOAD R0 timISR          ;
+         ADD  R0 R5              ;
+         LOAD R1 16              ; 2*8
+         STOR R0 [R1]            ;
+         SETI 8                  ; IE[8] <=> Timer < 0
+
+         LOAD R0 0               ; Init timer
+         LOAD R5 0               ;
+         SUB  R0 [R5+TIMER]      ;
+         STOR R0 [R5+TIMER]      ;
+
+         ; incremenent the counter
          ; read the buttons
-  click: LOAD R4 INPUT
+   main: LOAD R4 INPUT
          LOAD R0 [R4]              ; Load the current state
          LOAD R4 [GB + LASTVAR]    ; Load the last state
          AND  R0 %00001111         ; filter the first 4 buttons
@@ -49,11 +61,13 @@
    btn1: LOAD R3 R4
  	 AND  R3 %00000010
          DIV  R3 2                 ; shift right by 1
+         CMP  R3 0
          BEQ  btn2
 
          LOAD R3 R0
          AND  R3 %00000010
          DIV  R3 2
+         CMP  R3 0
          BNE  btn2
 
          LOAD R3 [GB + PWMVAR + 1] 
@@ -65,11 +79,13 @@
    btn2: LOAD R3 R4
  	 AND  R3 %00000100
          DIV  R3 4                 ; shift right by 2
+         CMP  R3 0
          BEQ  btn3
 
          LOAD R3 R0
          AND  R3 %00000100
          DIV  R3 4
+         CMP  R3 0
          BNE  btn3
 
          LOAD R3 [GB + PWMVAR + 2] 
@@ -81,17 +97,26 @@
    btn3: LOAD R3 R4               
  	 AND  R3 %00001000
          DIV  R3 8                 ; shift right by 3
-         BEQ  check
+         CMP  R3 0
+         BEQ  main
 
          LOAD R3 R0
          AND  R3 %00001000         
          DIV  R3 8
-         BNE  check
+         CMP  R3 0
+         BNE  main
 
          LOAD R3 [GB + PWMVAR + 3] 
          ADD  R3 1
          MOD  R3 100
          STOR R3 [GB + PWMVAR + 3]
+
+         BRA main
+
+ timISR: ; Handle interrupt
+         LOAD R1 [GB+COUNT]
+         ADD  R1 1
+         MOD  R1 100
 
   check: LOAD R5 0                 ; clear R5
          
@@ -120,7 +145,8 @@
          OR   R5 %00001000
 
          ; make the left four bits the inverse of the right four bits
- format: LOAD R0 R5
+ format: STOR R1 [GB+COUNT]
+         LOAD R0 R5
          MULS R0 16
          XOR  R5 %00001111
          OR   R5 R0
@@ -128,5 +154,12 @@
          ; Show R5 on the leds
    show: LOAD R0 OUTLEDS
          STOR R5 [R0]
-         BRA  main
+
+         LOAD R1 DELTA           ; Restore timer
+         LOAD R4 TIMER           ;
+         STOR R1 [R4]            ;
+         
+         SETI 8                  ;
+         RTE                     ;
+
 @END
